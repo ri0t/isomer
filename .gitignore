@@ -3,6 +3,7 @@ MANIFEST.in
 venv
 .cache
 build
+out
 dist
 docs/build
 __pycache__
