@@ -59,7 +59,7 @@ from isomer.error import (
     EXIT_INVALID_PARAMETER,
 )
 from isomer.migration import apply_migrations
-from isomer.misc import sorted_alphanumerical
+from isomer.misc import sorted_alphanumerical, nested_map_update, nested_map_find
 from isomer.misc.path import set_instance, get_etc_instance_path, get_path
 from isomer.logger import warn, critical
 from isomer.tool import (
@@ -215,8 +215,11 @@ def set_parameter(ctx, parameter, value):
     defaults = instance_template
     converted_value = None
 
+    path = parameter.split(".")
+
     try:
-        parameter_type = type(defaults[parameter])
+        default = nested_map_find(defaults, path)
+        parameter_type = type(default)
         log(parameter_type, pretty=True, lvl=debug)
 
         if parameter_type == tomlkit.items.Integer:
@@ -232,7 +235,8 @@ def set_parameter(ctx, parameter, value):
     if converted_value is None:
         log("Converted value was None! Recheck the new config!", lvl=warn)
 
-    instance_configuration[parameter] = converted_value
+    nested_map_update(instance_configuration, converted_value, path)
+    #instance_configuration[parameter] = converted_value
     log("New config:", instance_configuration, pretty=True, lvl=debug)
 
     ctx.obj["instances"][ctx.obj["instance"]] = instance_configuration
