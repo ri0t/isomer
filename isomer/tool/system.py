@@ -36,13 +36,21 @@ import os
 import time
 import click
 import shutil
+import pwd
 
 from click_didyoumean import DYMGroup
+from tomlkit import loads, dumps
+from tomlkit.exceptions import NonExistentKey
+from tomlkit import document, table, nl, comment
 
-from isomer.logger import error
-from isomer.misc.path import locations, get_path, get_log_path, get_etc_path
-from isomer.tool import platforms, install_isomer, log, run_process, ask, finish
-from isomer.tool.etc import create_configuration
+from isomer.logger import error, warn, verbose
+from isomer.misc.path import locations, get_path, get_log_path, get_etc_path, \
+    get_prefix_path
+from isomer.tool import platforms, install_isomer, log, run_process, ask, finish, \
+    questionnaire
+from isomer.tool.etc import create_configuration, write_configuration, upgrade_table,\
+    load_instances
+from isomer.tool.instance import create, set_parameter
 from isomer.error import abort, EXIT_NOT_OVERWRITING_CONFIGURATION
 
 
@@ -216,3 +224,121 @@ def uninstall():
     if response == "YES":
         shutil.rmtree("/var/lib/isomer")
         shutil.rmtree("/var/cache/isomer")
+
+
+@system.command(short_help="Checks overall system health")
+@click.option("--acknowledge", "-a", is_flag=True, default=False,
+              help="Acknowledge (log) positive checks")
+@click.pass_context
+def check(ctx, acknowledge):
+    """Performs some basic system configuration tests to estimate platform health
+
+    The checks range from file and folder location existance to checking if there
+    is a system isomer user"""
+
+    etc_path = get_etc_path()
+    prefix_path = get_prefix_path()
+
+    log("Checking etc in '%s' and prefix in '%s'" % (etc_path, prefix_path))
+
+    def check_exists(path):
+        if not os.path.exists(path):
+            log("Location '%s' does not exist" % path, lvl=warn)
+        elif acknowledge:
+            log("Location '%s' exists" % path)
+
+    locations_etc = [
+        '',
+        'isomer.conf',
+        'instances'
+    ]
+
+    locations_prefix = [
+        'var/lib/isomer',
+        'var/local/isomer',
+        'var/cache/isomer',
+        'var/log/isomer',
+        'var/run/isomer',
+        'var/backups/isomer',
+        'var/www/challenges'
+    ]
+
+    for location in locations_etc:
+        check_exists(os.path.join(etc_path, location))
+    for location in locations_prefix:
+        check_exists(os.path.join(prefix_path, location))
+
+    try:
+        pwd.getpwnam("isomer")
+        log("Isomer user exists")
+    except KeyError:
+        log("Isomer user does not exist", lvl=warn)
+
+
+
+@system.command(help="(WiP!) Upgrade older configuration files to the current version")
+@click.argument("filename")
+@click.pass_context
+def upgrade(ctx, filename):
+    """Work in progress, currently only lists the necessary transformations."""
+
+    log("You'll have to implement these manually, until this function is developed "
+        "completely!", lvl=warn)
+
+    with open(filename, 'r') as f:
+        old_configuration = loads(f.read())
+
+    old_version = old_configuration.get('version', 0)
+
+    log(old_configuration["web"]["address"])
+
+    backup_filename = filename + ".%s.backup" % old_version
+    log("Backing up old configuration to", backup_filename)
+
+    try:
+        shutil.copyfile(filename, backup_filename)
+    except PermissionError as e:
+        log("Could not backup configuration!", lvl=warn)
+
+    log(old_configuration, pretty=True, lvl=verbose)
+    log(old_version, max(upgrade_table), lvl=verbose)
+
+    for upgrade in range(old_version, max(upgrade_table)):
+        log("Processing meta upgrade to", upgrade)
+
+        for operation in upgrade_table[old_version + 1]:
+            log(operation, pretty=True)
+            for rule, transformations in operation.items():
+                if rule == 'add':
+                    for item, default_value in transformations.items():
+                        if item not in old_configuration:
+                            old_configuration.add(item, default_value)
+                        else:
+                            log("Item %s is already present" % item)
+                if rule == 'tableize':
+                    for item, table_values in transformations.items():
+                        log('Tableizing attributes under', item)
+                        new_table = table()
+
+                        for table_value in table_values:
+                            current_value = old_configuration[table_value]
+                            log("Tableizing", table_value, "and its value", current_value)
+                            del old_configuration[table_value]
+                            new_table.add(table_value, current_value)
+
+                        log(new_table, pretty=True)
+                        old_configuration.add(item, new_table)
+
+    new_configuration = dumps(old_configuration)
+
+    for upgrade in range(old_version, max(upgrade_table)):
+        log("Processing textual upgrade to", upgrade)
+
+        for operation in upgrade_table[old_version + 1]:
+            for rule, transformations in operation.items():
+                if rule == 'rename':
+                    for rename_value in transformations:
+                        log("Renaming", rename_value[0], rename_value[1])
+                        new_configuration = new_configuration.replace(rename_value[0], rename_value[1])
+
+    log(new_configuration, pretty=True)
