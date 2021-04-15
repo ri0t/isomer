@@ -4,6 +4,12 @@ dist
 .eggs
 .idea/*
 .idea
+.tox/*
+.tox
+.pytest_cache/*
+.pytest_cache
+.mypy_cache/*
+.mypy_cache
 build/*
 build
 coverage/*
@@ -12,3 +18,7 @@ isomer.egg-info/*
 isomer.egg-info
 frontend/dist/*
 frontend/dist
+frontend/node_modules/*
+frontend/node_modules
+out/*
+out
