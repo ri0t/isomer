@@ -111,6 +111,7 @@ def configure(ctx):
     if os.path.exists(get_etc_path()):
         abort(EXIT_NOT_OVERWRITING_CONFIGURATION)
     ctx = create_configuration(ctx)
+    write_configuration(ctx.obj['config'])
 
     finish(ctx)
 
