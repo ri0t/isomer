@@ -108,7 +108,7 @@ def system_all(ctx):
 def configure(ctx):
     """Generate a skeleton configuration for Isomer (needs sudo)"""
 
-    if os.path.exists(get_etc_path()):
+    if os.path.exists(os.path.join(get_etc_path(), "isomer.conf")):
         abort(EXIT_NOT_OVERWRITING_CONFIGURATION)
     ctx = create_configuration(ctx)
     write_configuration(ctx.obj['config'])
