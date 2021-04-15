@@ -185,7 +185,10 @@ def cli(
                 "Use 'iso system configure' to generate a configuration.", lvl=warn)
         return
 
-    set_prefix_path(configuration['meta']['prefix'])
+    if prefix_path is not None:
+        set_prefix_path(prefix_path)
+    else:
+        set_prefix_path(configuration['meta']['prefix'])
 
     instances = load_instances()
 
