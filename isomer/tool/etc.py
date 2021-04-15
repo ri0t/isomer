@@ -65,7 +65,6 @@ def create_configuration(ctx):
             )
             warn_error(EXIT_NO_PERMISSION)
 
-    write_configuration(configuration_template)
     ctx.obj["config"] = configuration_template
 
     return ctx
