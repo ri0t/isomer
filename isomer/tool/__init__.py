@@ -68,6 +68,9 @@ import spur
 
 from typing import Tuple, Union
 from hmac import compare_digest
+from tomlkit.exceptions import NonExistentKey
+from click import secho
+
 from isomer.error import (
     abort,
     EXIT_ISOMER_URL_REQUIRED,
@@ -77,7 +80,6 @@ from isomer.error import (
 )
 from isomer.logger import isolog, verbose, debug, error, warn
 from isomer.tool.defaults import platforms
-from tomlkit.exceptions import NonExistentKey
 
 
 def log(*args, **kwargs):
@@ -277,17 +279,51 @@ def _get_system_configuration(dbhost, dbname):
     return systemconfig
 
 
-def ask(question, default=None, data_type="str", show_hint=False):
+def questionnaire(catalog):
+
+    data = dict.fromkeys(catalog)
+
+    count = len(catalog)
+
+    for i, (item, (text, default, item_type)) in enumerate(catalog.items()):
+        question_text = "[%i/%i] " % (i + 1, count)
+
+        secho(question_text, fg='cyan', bg="blue", nl=False)
+        data[item] = ask(text, default, item_type, key=item, show_hint=True)
+        secho("\n")
+
+    return data
+
+
+def ask(question, default=None, data_type="str", key=None, show_hint=False):
     """Interactively ask the user for data"""
 
-    data = default
+    def prompt(msg):
+        secho(msg, nl=False, bold=True, fg="white", bg="blue")
+        secho("\n\n? ", nl=False, bold=True, fg="green")
+        if key is not None:
+            secho(key + ": ", nl=False, bold=True, fg="white")
+
+    def query():
+        data = input()
+        secho("\033[F\r? ", nl=False, bold=True, fg="green")
+        if key is not None:
+            secho(key + ": ", nl=False, bold=True, fg="white")
+        secho(data, bold=True, fg="green")
+        return data
+
+    data = None
 
     if data_type == "bool":
         data = None
         default_string = "Y" if default else "N"
 
+        msg = "%s? [%s]:" % (question, default_string)
+
         while data not in ("Y", "J", "N", "1", "0"):
-            data = input("%s? [%s]: " % (question, default_string)).upper()
+
+            prompt(msg)
+            data = query().upper()
 
             if data == "":
                 return default
@@ -295,26 +331,48 @@ def ask(question, default=None, data_type="str", show_hint=False):
         return data in ("Y", "J", "1")
     elif data_type in ("str", "unicode"):
         if show_hint:
-            msg = "%s? [%s] (%s): " % (question, default, data_type)
+            default_string = "''" if default is None else "'%s'" % default
+            msg = "%s [%s] (%s):" % (question, default_string, data_type)
         else:
             msg = question
-
-        data = input(msg)
+        prompt(msg)
+        data = query()
 
         if len(data) == 0:
             data = default
     elif data_type == "int":
         if show_hint:
-            msg = "%s? [%s] (%s): " % (question, default, data_type)
+            default_string = "0" if default is None else str(default)
+            msg = "%s [%s] (%s):" % (question, default_string, data_type)
         else:
             msg = question
-
-        data = input(msg)
+        prompt(msg)
+        data = query()
 
         if len(data) == 0:
             data = int(default)
         else:
             data = int(data)
+    elif isinstance(data_type, set):
+        if default is not None:
+            data_type.add("")
+        msg = "%s [%s] (One of %s):" % (question, default, data_type)
+        while data not in data_type:
+            prompt(msg)
+            data = query()
+
+            if data == "":
+                data = default
+                break
+        return data
+    elif isinstance(data_type, list) and len(data_type) == 1:
+        msg = "%s (Separate multiple by comma) [%s] (%s):" % (question, default, data_type[0])
+        prompt(msg)
+        multiple = query()
+        data = []
+        for item in multiple.split(","):
+            data.append(item.rstrip().lstrip())
+        return data
     else:
         print("Programming error! Datatype invalid!")
 
