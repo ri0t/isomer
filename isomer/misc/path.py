@@ -23,6 +23,8 @@
 
 import os.path
 from typing import Union
+from pwd import getpwnam
+
 
 from isomer.tool import log, warn, debug
 
@@ -117,7 +119,7 @@ def set_instance(instance, environment, prefix=None):
 
 
 def get_path(location: str, subfolder: str, ensure: bool = False, instance: str = "",
-             environment: str = ""):
+             environment: str = "", owner: str = ""):
     """Return a normalized path for the running instance and environment
 
 
@@ -151,5 +153,9 @@ def get_path(location: str, subfolder: str, ensure: bool = False, instance: str 
 
     if ensure and not os.path.exists(path):
         os.makedirs(path)
+
+    if owner != "":
+        uid = getpwnam(owner).pw_uid
+        os.chown(path, uid)
 
     return path
