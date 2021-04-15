@@ -405,8 +405,8 @@ def _archive(ctx, force=False, dynamic=False):
 
     log("Archiving database")
     if not dump(
-            instance_configuration["database_host"],
-            instance_configuration["database_port"],
+            instance_configuration["database"]["host"],
+            instance_configuration["database"]["port"],
             env["database"],
             os.path.join(temp_path, "db_" + timestamp + ".json"),
     ):

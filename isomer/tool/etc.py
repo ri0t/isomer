@@ -30,9 +30,8 @@ Instance, environment and remote configuration bits.
 import os
 import glob
 
-from tomlkit import loads, dumps
+from tomlkit import loads, dumps, document, table, nl, comment
 from tomlkit.exceptions import NonExistentKey
-from tomlkit import document, table, nl, comment
 
 from isomer.misc.std import std_now
 from isomer.tool import log, error, debug, verbose, warn
@@ -110,15 +109,15 @@ def valid_configuration(ctx):
     for name, item in ctx.obj["instances"].items():
         log("Valdiating instance", name, lvl=debug)
         log(item, pretty=True, lvl=verbose)
-        if item["web_port"] in ports:
+        if item["web"]["port"] in ports:
             log(
                 "Duplicate web port found in instance: %s:%i"
-                % (name, item["web_port"]),
+                % (name, item["web"]["port"]),
                 lvl=error,
             )
             return False
         else:
-            ports.append(item["web_port"])
+            ports.append(item["web"]["port"])
 
     return True
 
@@ -220,12 +219,52 @@ def write_remote(remote):
         abort(EXIT_NO_PERMISSION)
 
 
+upgrade_table = {
+    1: [
+        {
+            'tableize': {
+                'web': [
+                    'web_address', 'web_hostnames', 'web_port', 'web_certificate',
+                    'web_key', 'web_certificate_issuer', 'web_certificate_unit',
+                    'web_certificate_country', 'web_certificate_state',
+                    'web_certificate_location'
+                ],
+                'database': [
+                    'database_host', 'database_port', 'database_type'
+                ]
+            }
+        },
+        {
+            'rename': [
+                ['web_address', 'address'],
+                ['web_hostnames', 'hostnames'],
+                ['web_port', 'port'],
+                ['web_certificate', 'certificate'],
+                ['web_key', 'key'],
+                ['web_certificate_issuer', 'certificate_issuer'],
+                ['web_certificate_unit', 'certificate_unit'],
+                ['web_certificate_country', 'certificate_country'],
+                ['web_certificate_state', 'certificate_state'],
+                ['web_certificate_location', 'certificate_location'],
+                ['database_host', 'host'],
+                ['database_port', 'port'],
+                ['database_type', 'type'],
+            ],
+        }
+    ]
+}
+
+
+
 configuration_template = document()
-configuration_template.add(comment("Isomer Instance Management Configuration"))
+configuration_template.add(comment("Isomer Platform Management Configuration"))
+# TODO: Fix timestamping, the configuration isn't created just when this file gets
+#  imported, only later. (Low priority - the timestamp won't be much off usually.)
 configuration_template.add(comment("Created on %s" % std_now()))
 configuration_template.add(nl())
 
 meta = table()
+meta.add("configuration_version", "1")
 meta.add("platform", "amd64")
 meta["platform"].comment("Set to rpi for advanced Raspberry Pi support")
 meta.add("distribution", "debian")
@@ -234,9 +273,15 @@ meta.add("init", "systemd")
 meta["init"].comment("Currently, only systemd supported")
 meta.add("prefix", "")
 
+
 configuration_template.add("meta", meta)
 
-instance_template = table()
+instance_template = document()
+instance_template.add(comment("""
+# Isomer Instance Configuration
+# Created on %s
+#
+""" % std_now()))
 instance_template.add("name", "")
 instance_template.add("contact", "")
 instance_template.add("active", False)
@@ -247,35 +292,43 @@ instance_template["environment_toggles"].comment(
 )
 instance_template.add("loglevel", "20")
 instance_template.add("quiet", True)
-instance_template.add("database_host", "localhost")
-instance_template.add("database_port", 27017)
-instance_template.add("database_type", "mongodb")
 instance_template.add("user", "isomer")
 instance_template.add("group", "isomer")
-instance_template.add("web_address", "127.0.0.1")
-instance_template["web_address"].comment("Local listening address of backend")
-instance_template.add("web_hostnames", "localhost")
-instance_template["web_hostnames"].comment("Comma separated list of FQDN hostnames."
-    "Only the first one will be used for "
-                                           "selfsigned certificates.")
-instance_template.add("web_port", 8055)
-instance_template.add("web_certificate", "")
-instance_template.add("web_key", "")
+
+database_section = table()
+database_section.add("host", "localhost")
+database_section.add("port", 27017)
+database_section.add("type", "mongodb")
+database_section["type"].comment("Currently, only mongodb supported")
+
+instance_template.add("database", database_section)
+
+web_section = table()
+web_section.add("address", "127.0.0.1")
+web_section["address"].comment("Local listening address of backend")
+web_section.add("hostnames", "localhost")
+web_section["hostnames"].comment("Comma separated list of FQDN hostnames."
+    "Only the first one will be used for selfsigned certificates.")
+web_section.add("port", 8055)
+web_section.add("certificate", "")
+web_section.add("key", "")
 # TODO: Fix this comment and make the web_certificate stuff a table
-instance_template.comment("These certificate details are only for selfsigned "
-                          "certificates:")
-instance_template.add("web_certificate_issuer", "Isomeric Community")
-instance_template.add("web_certificate_unit", "Unknown")
-instance_template.add("web_certificate_country", "EU")
-instance_template.add("web_certificate_state", "Unknown")
-instance_template.add("web_certificate_location", "Unknown")
+web_section.add(comment("These certificate details are only for selfsigned "
+                          "certificates:"))
+web_section.add("certificate_issuer", "Isomeric Community")
+web_section.add("certificate_unit", "Unknown")
+web_section.add("certificate_country", "EU")
+web_section.add("certificate_state", "Unknown")
+web_section.add("certificate_location", "Unknown")
+
+instance_template.add("web", web_section)
+
 instance_template.add("source", "")
 instance_template["source"].comment("git, link or copy")
 instance_template.add("url", "")
 instance_template.add("modules", [])
 instance_template["modules"].comment("Modules added as [method, url] items")
 
-instance_template["database_type"].comment("Currently, only mongodb supported")
 instance_template.add("webserver", "nginx")
 instance_template["webserver"].comment("Currently, only nginx supported")
 instance_template.add("service_template", "builtin")

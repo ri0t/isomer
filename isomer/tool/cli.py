@@ -57,6 +57,7 @@ from isomer.version import version_info
 
 RPI_GPIO_CHANNEL = 5
 
+
 @click.group(
     context_settings={"help_option_names": ["-h", "--help"]},
     cls=DYMGroup,
@@ -326,8 +327,8 @@ def cli(
 
     if dbhost is None:
         dbhost = "%s:%i" % (
-            instance_configuration["database_host"],
-            instance_configuration["database_port"],
+            instance_configuration["database"]["host"],
+            instance_configuration["database"]["port"],
         )
 
     ctx.obj["dbhost"] = dbhost

@@ -173,9 +173,9 @@ def browser(ctx):
         protocol += "s"
 
     host = instance_configuration.get(
-        "web_hostname", instance_configuration.get("web_address", "127.0.0.1")
+        "web_hostname", instance_configuration.get("web", {}).get("address", "127.0.0.1")
     )
-    port = instance_configuration.get("web_port", None)
+    port = instance_configuration.get("web", {}).get("port", None)
 
     if port is None:
         url = "%s://%s" % (protocol, host)
@@ -726,7 +726,7 @@ def cert(ctx, selfsigned):
 
 
 def _instance_letsencrypt(instance_configuration):
-    hostnames = instance_configuration.get("web_hostnames", False)
+    hostnames = instance_configuration.get("web", {}).get("hostnames", False)
     hostnames = hostnames.replace(" ", "")
 
     if not hostnames or hostnames == "localhost":
@@ -798,12 +798,14 @@ def _instance_selfsigned(instance_configuration):
         cert_file = os.path.join(target, "selfsigned.crt")
         combined_file = os.path.join(target, "selfsigned.pem")
 
-        cert_conf = {k: v for k, v in instance_configuration.items() if
-                     k.startswith("web_certificate")}
+        web_section = instance_configuration['web']
+
+        cert_conf = {k: v for k, v in web_section.items() if
+                     k.startswith("certificate")}
 
         log("Certificate data:", cert_conf, pretty=True)
 
-        hostname = instance_configuration.get("web_hostnames", gethostname())
+        hostname = instance_configuration.get("web", {}).get("hostnames", gethostname())
         if isinstance(hostname, list):
             hostname = hostname[0]
 
@@ -830,13 +832,13 @@ def _instance_selfsigned(instance_configuration):
 
         # create a self-signed certificate
         certificate = crypto.X509()
-        certificate.get_subject().C = cert_conf.get("web_certificate_country",
+        certificate.get_subject().C = cert_conf.get("certificate_country",
                                                     "EU")
-        certificate.get_subject().ST = cert_conf.get("web_certificate_state", "Sol")
-        certificate.get_subject().L = cert_conf.get("web_certificate_location", "Earth")
+        certificate.get_subject().ST = cert_conf.get("certificate_state", "Sol")
+        certificate.get_subject().L = cert_conf.get("certificate_location", "Earth")
         # noinspection PyPep8
-        certificate.get_subject().O = cert_conf.get("web_certificate_issuer", "Unknown")
-        certificate.get_subject().OU = cert_conf.get("web_certificate_unit", "Unknown")
+        certificate.get_subject().O = cert_conf.get("certificate_issuer", "Unknown")
+        certificate.get_subject().OU = cert_conf.get("certificate_unit", "Unknown")
         certificate.get_subject().CN = hostname
         certificate.set_serial_number(serial)
         certificate.gmtime_adj_notBefore(0)
@@ -871,8 +873,8 @@ def _instance_selfsigned(instance_configuration):
 
     create_self_signed_cert(location)
 
-    instance_configuration["web_key"] = os.path.join(location, "selfsigned.key")
-    instance_configuration["web_certificate"] = os.path.join(location, "selfsigned.crt")
+    instance_configuration["web"]["key"] = os.path.join(location, "selfsigned.key")
+    instance_configuration["web"]["certificate"] = os.path.join(location, "selfsigned.crt")
 
     write_instance(instance_configuration)
 
@@ -914,12 +916,12 @@ def _create_nginx_config(ctx):
     current_env = config["environment"]
     env = config["environments"][current_env]
 
-    dbhost = config["database_host"]
+    dbhost = config["database"]["host"]
     dbname = env["database"]
 
-    hostnames = ctx.obj.get("web_hostnames", None)
+    hostnames = ctx.obj.get("web", {}).get("hostnames", None)
     if hostnames is None:
-        hostnames = config.get("web_hostnames", None)
+        hostnames = config.get("web", {}).get("hostnames", None)
     if hostnames is None:
         try:
             configuration = _get_system_configuration(dbhost, dbname)
@@ -935,8 +937,8 @@ Using 'localhost' for now""",
                 lvl=warn,
             )
             hostnames = "localhost"
-    port = config["web_port"]
-    address = config["web_address"]
+    port = config["web"]["port"]
+    address = config["web"]["address"]
 
     log(
         "Creating nginx configuration for %s:%i using %s@%s"
@@ -945,8 +947,8 @@ Using 'localhost' for now""",
 
     definitions = {
         "server_public_name": hostnames.replace(",", " "),
-        "ssl_certificate": config["web_certificate"],
-        "ssl_key": config["web_key"],
+        "ssl_certificate": config["web"]["certificate"],
+        "ssl_key": config["web"]["key"],
         "host_url": "http://%s:%i/" % (address, port),
         "instance": instance_name,
         "environment": current_env,
