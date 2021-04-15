@@ -218,13 +218,13 @@ class Core(ConfigurableComponent):
 
         # self.log(instance, pretty=True, lvl=verbose)
 
-        self.host = instance["web_address"] if host is None else host
-        self.port = instance["web_port"] if port is None else port
+        self.host = instance["web"]["address"] if host is None else host
+        self.port = instance["web"]["port"] if port is None else port
 
         self.log("Web configuration: %s:%i" % (self.host, int(self.port)), lvl=debug)
 
         self.certificate = certificate = (
-            instance["web_certificate"] if instance["web_certificate"] != "" else None
+            instance["web"]["certificate"] if instance["web"]["certificate"] != "" else None
         )
 
         if certificate:
