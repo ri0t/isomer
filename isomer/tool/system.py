@@ -89,10 +89,18 @@ def system(ctx, platform, omit_platform, use_sudo, log_actions):
 def system_all(ctx):
     """Performs all system setup tasks"""
 
+    _system_all(ctx)
+
+    finish(ctx)
+
+
+def _system_all(ctx):
+
     use_sudo = ctx.obj["use_sudo"]
 
-    log("Generating configuration")
-    if os.path.exists(get_etc_path()):
+    config_path = get_etc_path()
+    log("Generating configuration at", config_path)
+    if os.path.exists(config_path):
         abort(EXIT_NOT_OVERWRITING_CONFIGURATION)
     ctx = create_configuration(ctx)
 
@@ -108,7 +116,74 @@ def system_all(ctx):
     log("Creating Isomer filesystem locations")
     _create_system_folders(use_sudo)
 
-    finish(ctx)
+
+@system.command(name="quickstart", short_help="Quickstart Isomer")
+@click.option("--non-interactive", "--ni", is_flag=True, default=False,
+              help="Do not ask any questions and use default values")
+@click.pass_context
+def quickstart(ctx, non_interactive):
+
+    data = None
+
+    if not non_interactive:
+        catalog = {
+            'name': ("Please enter the owner's name", "", "str"),
+            'contact': ("Please enter a contact email address", "", "str"),
+            'address': ("Please enter IP Address to listen on", "127.0.0.1", "str"),
+            'hostnames': ("Please enter public hostnames", [], ["str"]),
+            'port': ("Please enter port to listen on", 8000, "int"),
+            # - certificate?
+            'source': ("Please choose Isomer update method", "github", {"github", "git", "copy", "link"}),
+            'url': ("Please enter Isomer update URL", "https://github.com/isomeric/isomer", "str"),
+            'user': ("Please specify user account to run instance under", "isomer", "str"),
+            'group': ("Please specify user group to run instance under", "isomer", "str"),
+            'modules': ("Do you want to install modules?", False, "bool")
+        }
+        data = questionnaire(catalog)
+
+        if data['modules'] is True:
+            module_catalog = {
+                'method': ("Choose a method to install module", "store", {"link", "copy", "git", "develop", "store"}),
+                'url': ("Enter URL/Path of module", None, "str"),
+                'more': ("Do you want to add another module", False, "bool")
+            }
+            more = True
+            modules = []
+
+            while more:
+                module_data = questionnaire(module_catalog)
+                modules.append([module_data['method'], module_data['url']])
+                more = module_data['more']
+
+            data['modules'] = modules
+        else:
+            data['modules'] = []
+
+        log(data, pretty=True)
+
+    log("Work in Progress! ")
+    exit(23)
+
+    with click.progressbar(
+            length=3,
+            label="Running Quickstart"
+    ) as bar:
+        _system_all(ctx)
+        bar.update(1)
+
+        ctx.obj['instances'] = load_instances()
+        log(ctx.obj['instances'])
+
+        ctx.invoke(create, instance_name="default")
+        if data is not None:
+            ctx.obj['instances'].update(data)
+
+        bar.update(1)
+
+        ctx.obj['instances'] = load_instances()
+        ctx.obj['instance_configuration'] = ctx.obj['instances']['default']
+        ctx.invoke(set_parameter, parameter="web.port", value="8000")
+        bar.update(1)
 
 
 @system.command(short_help="Generate a skeleton configuration for Isomer (needs sudo)")
